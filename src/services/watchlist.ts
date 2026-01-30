@@ -3,7 +3,7 @@
 
 import { prisma } from '../lib/db';
 import type { WatchlistEntry, Show, ShowDayAssignment } from '@prisma/client';
-import { assignShowToDay, findBestDayForShow } from './dayAssignment';
+import { assignShowToDay, findBestDayForShow, removeAllAssignments } from './dayAssignment';
 
 interface WatchlistOptions {
   startSeason?: number;
@@ -140,4 +140,65 @@ export async function promoteFromQueue(
   if (!result) throw new Error('Entry not found after update');
 
   return result;
+}
+
+export interface FinishShowResult {
+  finishedEntry: WatchlistEntryWithShow;
+  promotedEntry: WatchlistEntryWithShowAndAssignments | null;
+}
+
+export async function finishShow(entryId: number): Promise<FinishShowResult> {
+  const entry = await prisma.watchlistEntry.findUnique({
+    where: { id: entryId },
+    include: { dayAssignments: true, show: true },
+  });
+
+  if (!entry) throw new Error('Entry not found');
+
+  const freedRuntime = entry.show.episodeRuntime;
+
+  // Remove day assignments first
+  await removeAllAssignments(entryId);
+
+  // Mark as finished
+  await prisma.watchlistEntry.update({
+    where: { id: entryId },
+    data: { status: 'finished' },
+  });
+
+  // Find best queue candidate to promote
+  const promotedEntry = await autoPromoteFromQueue(freedRuntime);
+
+  const finishedEntry = await prisma.watchlistEntry.findUnique({
+    where: { id: entryId },
+    include: { show: true },
+  });
+
+  return {
+    finishedEntry: finishedEntry!,
+    promotedEntry,
+  };
+}
+
+async function autoPromoteFromQueue(
+  freedRuntime: number
+): Promise<WatchlistEntryWithShowAndAssignments | null> {
+  const queue = await prisma.watchlistEntry.findMany({
+    where: { status: 'queued' },
+    include: { show: true },
+    orderBy: { priority: 'asc' },
+  });
+
+  if (queue.length === 0) return null;
+
+  // Score queue entries by runtime similarity to freed slot
+  const scored = queue.map((entry) => {
+    const runtimeDiff = Math.abs(entry.show.episodeRuntime - freedRuntime);
+    return { entry, score: 100 - runtimeDiff };
+  });
+
+  const best = scored.sort((a, b) => b.score - a.score)[0];
+
+  // Promote the best match
+  return promoteFromQueue(best.entry.id);
 }

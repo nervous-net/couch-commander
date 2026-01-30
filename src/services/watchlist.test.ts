@@ -10,6 +10,7 @@ import {
   reorderWatchlist,
   updateWatchlistStatus,
   promoteFromQueue,
+  finishShow,
 } from './watchlist';
 import { cacheShow } from './showCache';
 import { updateSettings } from './settings';
@@ -147,6 +148,58 @@ describe('Watchlist Service', () => {
       await updateWatchlistStatus(entry.id, 'watching');
 
       await expect(promoteFromQueue(entry.id)).rejects.toThrow('not queued');
+    });
+  });
+
+  describe('finishShow', () => {
+    it('marks show as finished and removes day assignments', async () => {
+      await updateSettings({ weekdayMinutes: 120 });
+
+      const show = await cacheShow(1396);
+      const entry = await addToWatchlist(show.id);
+      await promoteFromQueue(entry.id);
+
+      const result = await finishShow(entry.id);
+
+      expect(result.finishedEntry.status).toBe('finished');
+
+      // Day assignments should be removed
+      const assignments = await prisma.showDayAssignment.findMany({
+        where: { watchlistEntryId: entry.id },
+      });
+      expect(assignments.length).toBe(0);
+    });
+
+    it('auto-promotes from queue when show finishes', async () => {
+      await updateSettings({ weekdayMinutes: 120 });
+
+      // Watching show
+      const show1 = await cacheShow(1396);
+      const entry1 = await addToWatchlist(show1.id);
+      await promoteFromQueue(entry1.id);
+
+      // Queued show
+      const show2 = await cacheShow(60059); // Better Call Saul
+      const entry2 = await addToWatchlist(show2.id);
+
+      // Finish the first show
+      const result = await finishShow(entry1.id);
+
+      expect(result.finishedEntry.status).toBe('finished');
+      expect(result.promotedEntry).not.toBeNull();
+      expect(result.promotedEntry?.status).toBe('watching');
+    });
+
+    it('returns null promotedEntry when queue is empty', async () => {
+      await updateSettings({ weekdayMinutes: 120 });
+
+      const show = await cacheShow(1396);
+      const entry = await addToWatchlist(show.id);
+      await promoteFromQueue(entry.id);
+
+      const result = await finishShow(entry.id);
+
+      expect(result.promotedEntry).toBeNull();
     });
   });
 });
