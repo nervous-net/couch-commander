@@ -8,9 +8,11 @@ import {
   getShowsForDay,
   removeShowFromDay,
   removeAllAssignments,
+  getDayCapacity,
 } from './dayAssignment';
 import { cacheShow } from './showCache';
-import { addToWatchlist } from './watchlist';
+import { addToWatchlist, updateWatchlistStatus } from './watchlist';
+import { updateSettings } from './settings';
 
 describe('Day Assignment Service', () => {
   beforeEach(async () => {
@@ -19,6 +21,7 @@ describe('Day Assignment Service', () => {
     await prisma.showDayAssignment.deleteMany();
     await prisma.watchlistEntry.deleteMany();
     await prisma.show.deleteMany();
+    await prisma.settings.deleteMany();
   });
 
   it('assigns a show to a specific day', async () => {
@@ -64,5 +67,28 @@ describe('Day Assignment Service', () => {
     const wednesday = await getShowsForDay(3);
     expect(monday.length).toBe(0);
     expect(wednesday.length).toBe(0);
+  });
+
+  it('calculates remaining capacity for a day', async () => {
+    // Setup: 120 min budget, one ~47-min show assigned
+    await updateSettings({ mondayMinutes: 120 });
+    const show = await cacheShow(1396); // Breaking Bad, ~47 min
+    const entry = await addToWatchlist(show.id);
+    await updateWatchlistStatus(entry.id, 'watching');
+    await assignShowToDay(entry.id, 1); // Monday
+
+    const capacity = await getDayCapacity(1); // Monday
+
+    expect(capacity.totalMinutes).toBe(120);
+    expect(capacity.usedMinutes).toBeGreaterThan(40);
+    expect(capacity.availableMinutes).toBeLessThan(80);
+  });
+
+  it('uses weekday default when no day-specific override', async () => {
+    await updateSettings({ weekdayMinutes: 90 }); // No mondayMinutes set
+
+    const capacity = await getDayCapacity(1); // Monday
+
+    expect(capacity.totalMinutes).toBe(90);
   });
 });

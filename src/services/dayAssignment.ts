@@ -3,6 +3,7 @@
 
 import { prisma } from '../lib/db';
 import type { ShowDayAssignment, WatchlistEntry, Show } from '@prisma/client';
+import { getSettings } from './settings';
 
 export type DayAssignmentWithShow = ShowDayAssignment & {
   watchlistEntry: WatchlistEntry & { show: Show };
@@ -43,4 +44,48 @@ export async function removeAllAssignments(watchlistEntryId: number): Promise<{ 
   return prisma.showDayAssignment.deleteMany({
     where: { watchlistEntryId },
   });
+}
+
+export interface DayCapacity {
+  totalMinutes: number;
+  usedMinutes: number;
+  availableMinutes: number;
+}
+
+export async function getDayCapacity(dayOfWeek: number): Promise<DayCapacity> {
+  const settings = await getSettings();
+
+  // Get budget for this day - check day-specific override first, then fall back to weekday/weekend
+  const dayBudgets = [
+    settings.sundayMinutes ?? settings.weekendMinutes,
+    settings.mondayMinutes ?? settings.weekdayMinutes,
+    settings.tuesdayMinutes ?? settings.weekdayMinutes,
+    settings.wednesdayMinutes ?? settings.weekdayMinutes,
+    settings.thursdayMinutes ?? settings.weekdayMinutes,
+    settings.fridayMinutes ?? settings.weekdayMinutes,
+    settings.saturdayMinutes ?? settings.weekendMinutes,
+  ];
+  const totalMinutes = dayBudgets[dayOfWeek];
+
+  // Get watching shows assigned to this day
+  const assignments = await prisma.showDayAssignment.findMany({
+    where: {
+      dayOfWeek,
+      watchlistEntry: { status: 'watching' },
+    },
+    include: {
+      watchlistEntry: { include: { show: true } },
+    },
+  });
+
+  const usedMinutes = assignments.reduce(
+    (sum, a) => sum + a.watchlistEntry.show.episodeRuntime,
+    0
+  );
+
+  return {
+    totalMinutes,
+    usedMinutes,
+    availableMinutes: totalMinutes - usedMinutes,
+  };
 }
