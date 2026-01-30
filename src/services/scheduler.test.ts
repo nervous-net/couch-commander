@@ -1,13 +1,14 @@
 // ABOUTME: Tests for the core scheduler service.
 // ABOUTME: Covers all scheduling modes and edge cases.
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { prisma } from '../lib/db';
 import { generateSchedule, getScheduleForDay } from './scheduler';
 import { cacheShow } from './showCache';
 import { addToWatchlist, promoteFromQueue } from './watchlist';
 import { updateSettings } from './settings';
 import { assignShowToDay } from './dayAssignment';
+import * as tmdb from './tmdb';
 
 // Helper to create a local date (avoids UTC parsing issues)
 function localDate(year: number, month: number, day: number): Date {
@@ -232,6 +233,150 @@ describe('Scheduler Service', () => {
       const showIds = new Set(mondaySchedule!.episodes.map((ep) => ep.showId));
       expect(showIds.has(show1.id)).toBe(true);
       expect(showIds.has(show2.id)).toBe(false); // Queued, not watching
+    });
+  });
+
+  describe('generateSchedule - episode availability', () => {
+    beforeEach(() => {
+      vi.resetAllMocks();
+    });
+
+    it('skips shows with unavailable episodes for returning series', async () => {
+      await updateSettings({ weekdayMinutes: 120 });
+
+      // Create a returning series show directly in db
+      const show = await prisma.show.create({
+        data: {
+          tmdbId: 88888,
+          title: 'Unavailable Show',
+          genres: '["Drama"]',
+          totalSeasons: 2,
+          totalEpisodes: 20,
+          episodeRuntime: 30,
+          status: 'Returning Series',
+        },
+      });
+
+      const entry = await prisma.watchlistEntry.create({
+        data: {
+          showId: show.id,
+          status: 'watching',
+          currentSeason: 2,
+          currentEpisode: 5,
+        },
+      });
+
+      // Assign to Monday
+      await assignShowToDay(entry.id, 1);
+
+      // Mock isEpisodeAvailable to return unavailable
+      vi.spyOn(tmdb, 'isEpisodeAvailable').mockResolvedValue({
+        available: false,
+        airDate: '2099-12-31',
+      });
+
+      const monday = localDate(2026, 2, 2);
+      await generateSchedule(monday, 1);
+
+      const mondaySchedule = await getScheduleForDay(monday);
+
+      // No episodes should be scheduled for this show
+      const scheduledForShow = mondaySchedule!.episodes.filter(
+        (ep) => ep.showId === show.id
+      );
+      expect(scheduledForShow.length).toBe(0);
+    });
+
+    it('includes ended shows without checking availability', async () => {
+      await updateSettings({ weekdayMinutes: 120 });
+
+      // Create an ended show directly in db
+      const show = await prisma.show.create({
+        data: {
+          tmdbId: 88889,
+          title: 'Ended Show',
+          genres: '["Comedy"]',
+          totalSeasons: 3,
+          totalEpisodes: 60,
+          episodeRuntime: 22,
+          status: 'Ended',
+        },
+      });
+
+      const entry = await prisma.watchlistEntry.create({
+        data: {
+          showId: show.id,
+          status: 'watching',
+          currentSeason: 1,
+          currentEpisode: 1,
+        },
+      });
+
+      // Assign to Monday
+      await assignShowToDay(entry.id, 1);
+
+      // Spy on isEpisodeAvailable to verify it's NOT called
+      const spy = vi.spyOn(tmdb, 'isEpisodeAvailable');
+
+      const monday = localDate(2026, 2, 2);
+      await generateSchedule(monday, 1);
+
+      // Should NOT call isEpisodeAvailable for ended shows
+      expect(spy).not.toHaveBeenCalled();
+
+      const mondaySchedule = await getScheduleForDay(monday);
+
+      // Should have scheduled at least one episode
+      const scheduledForShow = mondaySchedule!.episodes.filter(
+        (ep) => ep.showId === show.id
+      );
+      expect(scheduledForShow.length).toBeGreaterThan(0);
+    });
+
+    it('includes available episodes for returning series', async () => {
+      await updateSettings({ weekdayMinutes: 120 });
+
+      // Create a returning series show
+      const show = await prisma.show.create({
+        data: {
+          tmdbId: 88890,
+          title: 'Available Returning Show',
+          genres: '["Drama"]',
+          totalSeasons: 2,
+          totalEpisodes: 20,
+          episodeRuntime: 30,
+          status: 'Returning Series',
+        },
+      });
+
+      const entry = await prisma.watchlistEntry.create({
+        data: {
+          showId: show.id,
+          status: 'watching',
+          currentSeason: 1,
+          currentEpisode: 1,
+        },
+      });
+
+      // Assign to Monday
+      await assignShowToDay(entry.id, 1);
+
+      // Mock isEpisodeAvailable to return available
+      vi.spyOn(tmdb, 'isEpisodeAvailable').mockResolvedValue({
+        available: true,
+        airDate: '2020-01-01',
+      });
+
+      const monday = localDate(2026, 2, 2);
+      await generateSchedule(monday, 1);
+
+      const mondaySchedule = await getScheduleForDay(monday);
+
+      // Should have scheduled at least one episode
+      const scheduledForShow = mondaySchedule!.episodes.filter(
+        (ep) => ep.showId === show.id
+      );
+      expect(scheduledForShow.length).toBeGreaterThan(0);
     });
   });
 });

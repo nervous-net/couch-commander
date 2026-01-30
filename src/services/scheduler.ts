@@ -3,6 +3,7 @@
 
 import { prisma } from '../lib/db';
 import { getSettings, getMinutesForDay } from './settings';
+import { isEpisodeAvailable } from './tmdb';
 import type { ScheduleDay, ScheduledEpisode, Show, WatchlistEntry } from '@prisma/client';
 
 export type ScheduleDayWithEpisodes = ScheduleDay & {
@@ -103,6 +104,18 @@ async function fillDaySequential(
     const runtime = entry.show.episodeRuntime;
 
     if (remainingMinutes >= runtime && pos.episode <= entry.show.totalEpisodes) {
+      // Check availability for returning series
+      if (entry.show.status === 'Returning Series') {
+        const availability = await isEpisodeAvailable(
+          entry.show.tmdbId,
+          pos.season,
+          pos.episode
+        );
+        if (!availability.available) {
+          continue; // Skip this show, try next
+        }
+      }
+
       await prisma.scheduledEpisode.create({
         data: {
           scheduleDayId,
@@ -140,6 +153,18 @@ async function fillDayRoundRobin(
     const runtime = entry.show.episodeRuntime;
 
     if (remainingMinutes >= runtime && pos.episode <= entry.show.totalEpisodes) {
+      // Check availability for returning series
+      if (entry.show.status === 'Returning Series') {
+        const availability = await isEpisodeAvailable(
+          entry.show.tmdbId,
+          pos.season,
+          pos.episode
+        );
+        if (!availability.available) {
+          continue; // Skip this show, try next
+        }
+      }
+
       await prisma.scheduledEpisode.create({
         data: {
           scheduleDayId,
