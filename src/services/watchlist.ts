@@ -87,3 +87,16 @@ export async function advanceEpisode(
     },
   });
 }
+
+export type WatchlistStatus = 'queued' | 'watching' | 'finished' | 'dropped';
+
+export async function updateWatchlistStatus(
+  entryId: number,
+  status: WatchlistStatus
+): Promise<WatchlistEntryWithShow> {
+  return prisma.watchlistEntry.update({
+    where: { id: entryId },
+    data: { status },
+    include: { show: true },
+  });
+}

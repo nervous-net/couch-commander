@@ -38,6 +38,7 @@ model WatchlistEntry {
   currentEpisode Int      @default(1)
   modeOverride  String?   // "sequential", "roundrobin", or null for default
   active        Boolean   @default(true)
+  status        String    @default("queued")  // queued, watching, finished, dropped
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

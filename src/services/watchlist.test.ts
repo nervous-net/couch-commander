@@ -8,6 +8,7 @@ import {
   removeFromWatchlist,
   getWatchlist,
   reorderWatchlist,
+  updateWatchlistStatus,
 } from './watchlist';
 import { cacheShow } from './showCache';
 
@@ -97,6 +98,31 @@ describe('Watchlist Service', () => {
       const list = await getWatchlist();
       expect(list[0].id).toBe(entry2.id);
       expect(list[1].id).toBe(entry1.id);
+    });
+  });
+
+  describe('watchlist entry status', () => {
+    it('creates watchlist entry with queued status by default', async () => {
+      const entry = await addToWatchlist(testShow.id);
+      expect(entry.status).toBe('queued');
+    });
+
+    it('allows updating entry status', async () => {
+      const entry = await addToWatchlist(testShow.id);
+      const updated = await updateWatchlistStatus(entry.id, 'watching');
+      expect(updated.status).toBe('watching');
+    });
+
+    it('allows setting status to finished', async () => {
+      const entry = await addToWatchlist(testShow.id);
+      const updated = await updateWatchlistStatus(entry.id, 'finished');
+      expect(updated.status).toBe('finished');
+    });
+
+    it('allows setting status to dropped', async () => {
+      const entry = await addToWatchlist(testShow.id);
+      const updated = await updateWatchlistStatus(entry.id, 'dropped');
+      expect(updated.status).toBe('dropped');
     });
   });
 });
