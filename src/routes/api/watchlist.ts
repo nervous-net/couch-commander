@@ -22,9 +22,13 @@ router.post('/', async (req, res) => {
     const entry = await addToWatchlist(show.id);
     await clearSchedule(); // Force regeneration
     res.status(201).json({ success: true, id: entry.id });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Add to watchlist error:', error);
-    res.status(500).json({ error: 'Failed to add show' });
+    if (error.code === 'P2002') {
+      res.status(400).json({ error: 'Show is already in your watchlist' });
+    } else {
+      res.status(500).json({ error: 'Failed to add show' });
+    }
   }
 });
 
@@ -87,18 +91,29 @@ router.put('/:id/episode', async (req, res) => {
   const { id } = req.params;
   const { season, episode } = req.body;
 
+  console.log('Episode update request:', { id, season, episode, body: req.body });
+
+  const seasonNum = Number(season);
+  const episodeNum = Number(episode);
+
+  if (isNaN(seasonNum) || isNaN(episodeNum) || seasonNum < 1 || episodeNum < 1) {
+    return res.status(400).json({ error: 'Invalid season or episode number' });
+  }
+
   try {
     const entry = await prisma.watchlistEntry.update({
       where: { id: parseInt(id) },
       data: {
-        currentSeason: parseInt(season) || 1,
-        currentEpisode: parseInt(episode) || 1,
+        currentSeason: seasonNum,
+        currentEpisode: episodeNum,
       },
       include: { show: true },
     });
+    console.log('Updated entry:', entry.id, 'to S' + entry.currentSeason + 'E' + entry.currentEpisode);
     await clearSchedule();
     res.status(200).json(entry);
   } catch (error) {
+    console.error('Episode update error:', error);
     res.status(400).json({ error: (error as Error).message });
   }
 });
