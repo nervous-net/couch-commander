@@ -47,7 +47,7 @@ export async function searchShows(query: string): Promise<ShowSearchResult[]> {
     throw new Error(`TMDB API error: ${response.status}`);
   }
 
-  const data: TMDBSearchResponse = await response.json();
+  const data = (await response.json()) as TMDBSearchResponse;
 
   return data.results.map((show) => ({
     id: show.id,
@@ -100,7 +100,7 @@ async function fetchRuntimeFromSeason(tmdbId: number, apiKey: string): Promise<n
       return null;
     }
 
-    const data: TMDBSeasonDetails = await response.json();
+    const data = (await response.json()) as TMDBSeasonDetails;
 
     // Extract runtimes from episodes, filtering out null values
     const runtimes = data.episodes
@@ -127,7 +127,7 @@ export async function getShowDetails(tmdbId: number): Promise<ShowDetails> {
     throw new Error(`TMDB API error: ${response.status}`);
   }
 
-  const data: TMDBShowDetails = await response.json();
+  const data = (await response.json()) as TMDBShowDetails;
 
   // Calculate average runtime using multiple fallback strategies
   let avgRuntime: number;
@@ -180,9 +180,11 @@ export async function isEpisodeAvailable(
       return { available: false, airDate: null };
     }
 
-    const data = await response.json();
+    const data = (await response.json()) as {
+      episodes?: Array<{ episode_number: number; air_date: string | null }>;
+    };
     const episodeData = data.episodes?.find(
-      (ep: { episode_number: number }) => ep.episode_number === episode
+      (ep) => ep.episode_number === episode
     );
 
     if (!episodeData) {
