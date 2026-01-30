@@ -127,6 +127,7 @@ async function updateEpisode(entryId) {
                     hx-post="/api/watchlist/<%= entry.id %>/demote"
                     hx-swap="none"
                     hx-confirm="Move this show back to queue?"
+                    hx-on::after-request="location.reload()"
                     class="text-yellow-400 hover:text-yellow-300 text-sm">
               Demote
             </button>
@@ -134,6 +135,7 @@ async function updateEpisode(entryId) {
                     hx-post="/api/watchlist/<%= entry.id %>/finish"
                     hx-swap="none"
                     hx-confirm="Mark this show as finished?"
+                    hx-on::after-request="location.reload()"
                     class="text-green-400 hover:text-green-300 text-sm">
               Finish
             </button>
@@ -227,6 +229,7 @@ async function updateEpisode(entryId) {
             <button type="button"
                     hx-post="/api/watchlist/<%= entry.id %>/promote"
                     hx-swap="none"
+                    hx-on::after-request="location.reload()"
                     class="bg-purple-600 hover:bg-purple-700 px-3 py-1 rounded text-sm">
               Promote
             </button>
