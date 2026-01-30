@@ -1,3 +1,21 @@
+<script>
+function updateDays(entryId) {
+  const checkboxes = document.querySelectorAll('.day-checkbox-' + entryId);
+  const days = [];
+  checkboxes.forEach(cb => {
+    if (cb.checked) days.push(parseInt(cb.value));
+  });
+
+  fetch('/api/watchlist/' + entryId + '/days', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ days })
+  }).then(() => {
+    // Optionally refresh the page to show updated schedule
+  });
+}
+</script>
+
 <div class="space-y-8">
   <h1 class="text-3xl font-bold">My Watchlist</h1>
 
@@ -37,34 +55,56 @@
     <% } else { %>
     <div class="space-y-2" id="watching-items">
       <% watching.forEach((entry) => { %>
-      <div class="bg-gray-800 rounded-lg p-4 flex gap-4 items-center border-l-4 border-green-500">
-        <% if (entry.show.posterPath) { %>
-        <img src="https://image.tmdb.org/t/p/w92<%= entry.show.posterPath %>"
-             alt="<%= entry.show.title %>"
-             class="w-12 rounded">
-        <% } else { %>
-        <div class="w-12 h-18 bg-gray-700 rounded flex items-center justify-center text-gray-500 text-xs">No img</div>
-        <% } %>
-        <div class="flex-1">
-          <h3 class="font-semibold"><%= entry.show.title %></h3>
-          <p class="text-sm text-gray-400">
-            S<%= entry.currentSeason %>E<%= entry.currentEpisode %> &middot;
-            <%= entry.show.episodeRuntime %>min episodes
-          </p>
-          <p class="text-sm text-purple-400"><%= formatDays(entry.dayAssignments) %></p>
+      <div class="bg-gray-800 rounded-lg p-4 border-l-4 border-green-500">
+        <div class="flex gap-4 items-center">
+          <% if (entry.show.posterPath) { %>
+          <img src="https://image.tmdb.org/t/p/w92<%= entry.show.posterPath %>"
+               alt="<%= entry.show.title %>"
+               class="w-12 rounded">
+          <% } else { %>
+          <div class="w-12 h-18 bg-gray-700 rounded flex items-center justify-center text-gray-500 text-xs">No img</div>
+          <% } %>
+          <div class="flex-1">
+            <h3 class="font-semibold"><%= entry.show.title %></h3>
+            <p class="text-sm text-gray-400">
+              S<%= entry.currentSeason %>E<%= entry.currentEpisode %> &middot;
+              <%= entry.show.episodeRuntime %>min episodes
+            </p>
+          </div>
+          <div class="flex gap-2">
+            <button hx-post="/api/watchlist/<%= entry.id %>/finish"
+                    hx-swap="none"
+                    class="text-green-400 hover:text-green-300 text-sm">
+              Finish
+            </button>
+            <button hx-delete="/api/watchlist/<%= entry.id %>"
+                    hx-target="closest div.bg-gray-800"
+                    hx-swap="outerHTML"
+                    class="text-red-400 hover:text-red-300">
+              Remove
+            </button>
+          </div>
         </div>
-        <div class="flex gap-2">
-          <button hx-post="/api/watchlist/<%= entry.id %>/finish"
-                  hx-swap="none"
-                  class="text-green-400 hover:text-green-300 text-sm">
-            Finish
-          </button>
-          <button hx-delete="/api/watchlist/<%= entry.id %>"
-                  hx-target="closest div.bg-gray-800"
-                  hx-swap="outerHTML"
-                  class="text-red-400 hover:text-red-300">
-            Remove
-          </button>
+        <!-- Day Selection -->
+        <div class="mt-3 pt-3 border-t border-gray-700">
+          <span class="text-xs text-gray-400 mr-2">Days:</span>
+          <%
+            const entryDays = entry.dayAssignments.map(a => a.dayOfWeek);
+            dayNames.forEach((day, idx) => {
+          %>
+          <label class="inline-flex items-center mr-2 cursor-pointer">
+            <input type="checkbox"
+                   class="day-checkbox-<%= entry.id %> sr-only peer"
+                   value="<%= idx %>"
+                   <%= entryDays.includes(idx) ? 'checked' : '' %>
+                   onchange="updateDays(<%= entry.id %>)">
+            <span class="px-2 py-1 text-xs rounded
+                         peer-checked:bg-purple-600 peer-checked:text-white
+                         bg-gray-700 text-gray-400 hover:bg-gray-600">
+              <%= day %>
+            </span>
+          </label>
+          <% }) %>
         </div>
       </div>
       <% }) %>

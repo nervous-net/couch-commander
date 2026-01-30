@@ -5,6 +5,7 @@ import { Router } from 'express';
 import { cacheShow } from '../../services/showCache';
 import { addToWatchlist, removeFromWatchlist, promoteFromQueue, finishShow } from '../../services/watchlist';
 import { clearSchedule } from '../../services/scheduler';
+import { setShowDays } from '../../services/dayAssignment';
 
 const router = Router();
 
@@ -56,6 +57,26 @@ router.post('/:id/finish', async (req, res) => {
   try {
     const result = await finishShow(parseInt(id));
     res.status(200).json(result);
+  } catch (error) {
+    res.status(400).json({ error: (error as Error).message });
+  }
+});
+
+router.put('/:id/days', async (req, res) => {
+  const { id } = req.params;
+  const { days } = req.body;
+
+  if (!Array.isArray(days)) {
+    return res.status(400).json({ error: 'days must be an array' });
+  }
+
+  // Validate days are 0-6
+  const validDays = days.filter((d) => typeof d === 'number' && d >= 0 && d <= 6);
+
+  try {
+    const assignments = await setShowDays(parseInt(id), validDays);
+    await clearSchedule(); // Force regeneration
+    res.status(200).json({ success: true, assignments });
   } catch (error) {
     res.status(400).json({ error: (error as Error).message });
   }

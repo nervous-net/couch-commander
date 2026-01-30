@@ -46,6 +46,27 @@ export async function removeAllAssignments(watchlistEntryId: number): Promise<{ 
   });
 }
 
+export async function setShowDays(
+  watchlistEntryId: number,
+  days: number[]
+): Promise<ShowDayAssignment[]> {
+  // Remove all existing assignments
+  await prisma.showDayAssignment.deleteMany({
+    where: { watchlistEntryId },
+  });
+
+  // Create new assignments for each day
+  const assignments: ShowDayAssignment[] = [];
+  for (const dayOfWeek of days) {
+    const assignment = await prisma.showDayAssignment.create({
+      data: { watchlistEntryId, dayOfWeek },
+    });
+    assignments.push(assignment);
+  }
+
+  return assignments;
+}
+
 export interface DayCapacity {
   totalMinutes: number;
   usedMinutes: number;
