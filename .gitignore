@@ -5,3 +5,4 @@ dist/
 *.db-journal
 
 /src/generated/prisma
+prisma/test.db

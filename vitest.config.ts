@@ -7,7 +7,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    setupFiles: ['dotenv/config'],
+    setupFiles: ['./vitest.setup.ts', 'dotenv/config'],
     exclude: ['**/node_modules/**', '**/dist/**'],
     // Run tests sequentially to avoid database conflicts
     fileParallelism: false,
