@@ -3,9 +3,10 @@
 
 import { Router } from 'express';
 import { cacheShow } from '../../services/showCache';
-import { addToWatchlist, removeFromWatchlist, promoteFromQueue, finishShow } from '../../services/watchlist';
+import { addToWatchlist, removeFromWatchlist, promoteFromQueue, finishShow, updateWatchlistEntry } from '../../services/watchlist';
 import { clearSchedule } from '../../services/scheduler';
 import { setShowDays } from '../../services/dayAssignment';
+import { prisma } from '../../lib/db';
 
 const router = Router();
 
@@ -77,6 +78,26 @@ router.put('/:id/days', async (req, res) => {
     const assignments = await setShowDays(parseInt(id), validDays);
     await clearSchedule(); // Force regeneration
     res.status(200).json({ success: true, assignments });
+  } catch (error) {
+    res.status(400).json({ error: (error as Error).message });
+  }
+});
+
+router.put('/:id/episode', async (req, res) => {
+  const { id } = req.params;
+  const { season, episode } = req.body;
+
+  try {
+    const entry = await prisma.watchlistEntry.update({
+      where: { id: parseInt(id) },
+      data: {
+        currentSeason: parseInt(season) || 1,
+        currentEpisode: parseInt(episode) || 1,
+      },
+      include: { show: true },
+    });
+    await clearSchedule();
+    res.status(200).json(entry);
   } catch (error) {
     res.status(400).json({ error: (error as Error).message });
   }
