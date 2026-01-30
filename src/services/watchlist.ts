@@ -193,9 +193,6 @@ export async function finishShow(entryId: number): Promise<FinishShowResult> {
     data: { status: newStatus },
   });
 
-  // Find best queue candidate to promote (only if we actually finished a show)
-  const promotedEntry = await autoPromoteFromQueue(freedRuntime);
-
   const finishedEntry = await prisma.watchlistEntry.findUnique({
     where: { id: entryId },
     include: { show: true },
@@ -203,7 +200,7 @@ export async function finishShow(entryId: number): Promise<FinishShowResult> {
 
   return {
     finishedEntry: finishedEntry!,
-    promotedEntry,
+    promotedEntry: null, // User chooses what to promote manually
     movedToQueue: isReturning,
   };
 }
