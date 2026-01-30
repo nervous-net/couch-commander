@@ -73,6 +73,10 @@ interface TMDBShowDetails {
   first_air_date: string;
 }
 
+interface TMDBSeasonDetails {
+  episodes: { runtime: number | null }[];
+}
+
 export interface ShowDetails {
   id: number;
   name: string;
@@ -86,6 +90,34 @@ export interface ShowDetails {
   firstAirDate: string;
 }
 
+async function fetchRuntimeFromSeason(tmdbId: number, apiKey: string): Promise<number | null> {
+  // Fetch season 1 data to get episode runtimes
+  const url = `${TMDB_BASE_URL}/tv/${tmdbId}/season/1?api_key=${apiKey}`;
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      return null;
+    }
+
+    const data: TMDBSeasonDetails = await response.json();
+
+    // Extract runtimes from episodes, filtering out null values
+    const runtimes = data.episodes
+      .map((ep) => ep.runtime)
+      .filter((runtime): runtime is number => runtime !== null && runtime > 0);
+
+    if (runtimes.length === 0) {
+      return null;
+    }
+
+    // Return average runtime
+    return Math.round(runtimes.reduce((a, b) => a + b, 0) / runtimes.length);
+  } catch {
+    return null;
+  }
+}
+
 export async function getShowDetails(tmdbId: number): Promise<ShowDetails> {
   const apiKey = getApiKey();
   const url = `${TMDB_BASE_URL}/tv/${tmdbId}?api_key=${apiKey}`;
@@ -97,10 +129,23 @@ export async function getShowDetails(tmdbId: number): Promise<ShowDetails> {
 
   const data: TMDBShowDetails = await response.json();
 
-  // Calculate average runtime, default to 45 if not available
-  const avgRuntime = data.episode_run_time.length > 0
-    ? Math.round(data.episode_run_time.reduce((a, b) => a + b, 0) / data.episode_run_time.length)
-    : 45;
+  // Calculate average runtime using multiple fallback strategies
+  let avgRuntime: number;
+  if (data.episode_run_time.length > 0) {
+    // First try: show-level episode_run_time array
+    avgRuntime = Math.round(
+      data.episode_run_time.reduce((a, b) => a + b, 0) / data.episode_run_time.length
+    );
+  } else {
+    // Second try: fetch runtime from season 1 episode data
+    const seasonRuntime = await fetchRuntimeFromSeason(tmdbId, apiKey);
+    if (seasonRuntime !== null) {
+      avgRuntime = seasonRuntime;
+    } else {
+      // Last resort: default to 45 minutes
+      avgRuntime = 45;
+    }
+  }
 
   return {
     id: data.id,

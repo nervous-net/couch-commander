@@ -41,5 +41,11 @@ describe('TMDB Service', () => {
     it('throws error for invalid show ID', async () => {
       await expect(getShowDetails(999999999)).rejects.toThrow();
     });
+
+    it('fetches runtime from season data when episode_run_time is empty', async () => {
+      // The Office (2316) has 22-min episodes but empty episode_run_time
+      const details = await getShowDetails(2316);
+      expect(details.episodeRuntime).toBeLessThan(30);
+    });
   });
 });
