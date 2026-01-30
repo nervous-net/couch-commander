@@ -6,6 +6,7 @@ import path from 'path';
 import dotenv from 'dotenv';
 import { getScheduleForDay, generateSchedule } from './services/scheduler';
 import watchlistRoutes from './routes/watchlist';
+import settingsRoutes from './routes/settings';
 import showsApiRoutes from './routes/api/shows';
 import watchlistApiRoutes from './routes/api/watchlist';
 
@@ -44,6 +45,7 @@ app.use('/api/watchlist', watchlistApiRoutes);
 
 // Page routes
 app.use('/watchlist', watchlistRoutes);
+app.use('/settings', settingsRoutes);
 
 // Routes
 app.get('/health', (_req, res) => {

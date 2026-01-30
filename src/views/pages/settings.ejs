@@ -1,0 +1,85 @@
+<div class="space-y-8">
+  <h1 class="text-3xl font-bold">Settings</h1>
+
+  <form hx-post="/settings" hx-swap="none" hx-on::after-request="alert('Settings saved!')">
+    <!-- Time Budgets -->
+    <div class="bg-gray-800 rounded-lg p-4 space-y-4">
+      <h2 class="text-lg font-semibold">Daily Time Budgets</h2>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">Weekday (minutes)</label>
+          <input type="number" name="weekdayMinutes" value="<%= settings.weekdayMinutes %>"
+                 class="w-full bg-gray-700 rounded px-3 py-2">
+        </div>
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">Weekend (minutes)</label>
+          <input type="number" name="weekendMinutes" value="<%= settings.weekendMinutes %>"
+                 class="w-full bg-gray-700 rounded px-3 py-2">
+        </div>
+      </div>
+
+      <details class="mt-4">
+        <summary class="cursor-pointer text-purple-400">Day-specific overrides</summary>
+        <div class="grid grid-cols-2 gap-4 mt-4">
+          <% ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].forEach(day => { %>
+          <div>
+            <label class="block text-sm text-gray-400 mb-1 capitalize"><%= day %> (optional)</label>
+            <input type="number" name="<%= day %>Minutes"
+                   value="<%= settings[day + 'Minutes'] || '' %>"
+                   placeholder="Use default"
+                   class="w-full bg-gray-700 rounded px-3 py-2">
+          </div>
+          <% }) %>
+        </div>
+      </details>
+    </div>
+
+    <!-- Scheduling Mode -->
+    <div class="bg-gray-800 rounded-lg p-4 space-y-4 mt-4">
+      <h2 class="text-lg font-semibold">Scheduling Mode</h2>
+
+      <div class="space-y-2">
+        <label class="flex items-center gap-2">
+          <input type="radio" name="schedulingMode" value="sequential"
+                 <%= settings.schedulingMode === 'sequential' ? 'checked' : '' %>>
+          <span>Sequential</span>
+          <span class="text-sm text-gray-400">- Watch one show at a time until finished</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input type="radio" name="schedulingMode" value="roundrobin"
+                 <%= settings.schedulingMode === 'roundrobin' ? 'checked' : '' %>>
+          <span>Round-robin</span>
+          <span class="text-sm text-gray-400">- Rotate through all shows</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input type="radio" name="schedulingMode" value="genre"
+                 <%= settings.schedulingMode === 'genre' ? 'checked' : '' %>>
+          <span>Genre-based</span>
+          <span class="text-sm text-gray-400">- Schedule based on genre rules</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Staggered Start -->
+    <div class="bg-gray-800 rounded-lg p-4 space-y-4 mt-4">
+      <h2 class="text-lg font-semibold">Staggered Start</h2>
+
+      <label class="flex items-center gap-2">
+        <input type="checkbox" name="staggeredStart" value="true"
+               <%= settings.staggeredStart ? 'checked' : '' %>>
+        <span>Enable staggered start</span>
+      </label>
+
+      <div class="<%= !settings.staggeredStart ? 'opacity-50' : '' %>">
+        <label class="block text-sm text-gray-400 mb-1">Episodes before starting next show</label>
+        <input type="number" name="staggerEpisodes" value="<%= settings.staggerEpisodes %>"
+               class="w-32 bg-gray-700 rounded px-3 py-2">
+      </div>
+    </div>
+
+    <button type="submit" class="mt-6 bg-purple-600 hover:bg-purple-700 px-6 py-2 rounded">
+      Save Settings
+    </button>
+  </form>
+</div>
