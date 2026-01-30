@@ -5,6 +5,9 @@ import express from 'express';
 import path from 'path';
 import dotenv from 'dotenv';
 import { getScheduleForDay, generateSchedule } from './services/scheduler';
+import watchlistRoutes from './routes/watchlist';
+import showsApiRoutes from './routes/api/shows';
+import watchlistApiRoutes from './routes/api/watchlist';
 
 dotenv.config();
 
@@ -34,6 +37,13 @@ function renderWithLayout(
     res.render('layouts/main', { ...data, body });
   });
 }
+
+// API routes
+app.use('/api/shows', showsApiRoutes);
+app.use('/api/watchlist', watchlistApiRoutes);
+
+// Page routes
+app.use('/watchlist', watchlistRoutes);
 
 // Routes
 app.get('/health', (_req, res) => {
