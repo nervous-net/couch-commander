@@ -2,7 +2,8 @@
 // ABOUTME: Handles adding, removing, reordering, and progress tracking.
 
 import { prisma } from '../lib/db';
-import type { WatchlistEntry, Show } from '@prisma/client';
+import type { WatchlistEntry, Show, ShowDayAssignment } from '@prisma/client';
+import { assignShowToDay, findBestDayForShow } from './dayAssignment';
 
 interface WatchlistOptions {
   startSeason?: number;
@@ -99,4 +100,44 @@ export async function updateWatchlistStatus(
     data: { status },
     include: { show: true },
   });
+}
+
+export type WatchlistEntryWithShowAndAssignments = WatchlistEntry & {
+  show: Show;
+  dayAssignments: ShowDayAssignment[];
+};
+
+export async function promoteFromQueue(
+  entryId: number
+): Promise<WatchlistEntryWithShowAndAssignments> {
+  const entry = await prisma.watchlistEntry.findUnique({
+    where: { id: entryId },
+    include: { show: true },
+  });
+
+  if (!entry) throw new Error('Entry not found');
+  if (entry.status !== 'queued') throw new Error('Entry is not queued');
+
+  const genres = JSON.parse(entry.show.genres) as string[];
+  const bestDay = await findBestDayForShow(entry.show.episodeRuntime, genres);
+
+  // Update status to watching
+  await prisma.watchlistEntry.update({
+    where: { id: entryId },
+    data: { status: 'watching' },
+  });
+
+  // Assign to best day
+  await assignShowToDay(entryId, bestDay);
+
+  // Return with relations
+  const result = await prisma.watchlistEntry.findUnique({
+    where: { id: entryId },
+    include: { show: true, dayAssignments: true },
+  });
+
+  // This should never happen since we just updated the entry
+  if (!result) throw new Error('Entry not found after update');
+
+  return result;
 }

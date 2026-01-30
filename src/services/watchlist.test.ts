@@ -9,8 +9,10 @@ import {
   getWatchlist,
   reorderWatchlist,
   updateWatchlistStatus,
+  promoteFromQueue,
 } from './watchlist';
 import { cacheShow } from './showCache';
+import { updateSettings } from './settings';
 
 describe('Watchlist Service', () => {
   let testShow: Awaited<ReturnType<typeof cacheShow>>;
@@ -124,6 +126,27 @@ describe('Watchlist Service', () => {
       const entry = await addToWatchlist(testShow.id);
       const updated = await updateWatchlistStatus(entry.id, 'dropped');
       expect(updated.status).toBe('dropped');
+    });
+  });
+
+  describe('promoteFromQueue', () => {
+    it('promotes show from queue to watching and assigns day', async () => {
+      await updateSettings({ weekdayMinutes: 120 });
+
+      const entry = await addToWatchlist(testShow.id);
+      expect(entry.status).toBe('queued');
+
+      const promoted = await promoteFromQueue(entry.id);
+
+      expect(promoted.status).toBe('watching');
+      expect(promoted.dayAssignments.length).toBeGreaterThan(0);
+    });
+
+    it('throws error if entry is not queued', async () => {
+      const entry = await addToWatchlist(testShow.id);
+      await updateWatchlistStatus(entry.id, 'watching');
+
+      await expect(promoteFromQueue(entry.id)).rejects.toThrow('not queued');
     });
   });
 });
