@@ -1,5 +1,5 @@
 // ABOUTME: Integration tests for watchlist API routes.
-// ABOUTME: Tests add and remove operations.
+// ABOUTME: Tests add, remove, and promote operations.
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
@@ -49,6 +49,48 @@ describe('Watchlist API', () => {
 
       const remaining = await prisma.watchlistEntry.findMany();
       expect(remaining.length).toBe(0);
+    });
+  });
+
+  describe('POST /api/watchlist/:id/promote', () => {
+    it('promotes a queued show to watching', async () => {
+      // First add a show (it will be queued by default)
+      const addRes = await request(app)
+        .post('/api/watchlist')
+        .send({ tmdbId: 1396 });
+
+      expect(addRes.status).toBe(201);
+
+      const entryId = addRes.body.id;
+
+      // Then promote it
+      const res = await request(app)
+        .post(`/api/watchlist/${entryId}/promote`);
+
+      expect(res.status).toBe(200);
+
+      // Verify status changed
+      const entry = await prisma.watchlistEntry.findUnique({
+        where: { id: entryId },
+      });
+      expect(entry?.status).toBe('watching');
+    });
+
+    it('returns 400 for non-queued entry', async () => {
+      const addRes = await request(app)
+        .post('/api/watchlist')
+        .send({ tmdbId: 1396 });
+
+      const entryId = addRes.body.id;
+
+      // Promote once
+      await request(app).post(`/api/watchlist/${entryId}/promote`);
+
+      // Try to promote again (already watching)
+      const res = await request(app)
+        .post(`/api/watchlist/${entryId}/promote`);
+
+      expect(res.status).toBe(400);
     });
   });
 });
