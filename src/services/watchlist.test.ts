@@ -1,7 +1,7 @@
 // ABOUTME: Tests for watchlist service.
-// ABOUTME: Covers adding, removing, and reordering shows.
+// ABOUTME: Covers adding, removing, reordering, and promotion blocking.
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { prisma } from '../lib/db';
 import {
   addToWatchlist,
@@ -11,9 +11,19 @@ import {
   updateWatchlistStatus,
   promoteFromQueue,
   finishShow,
+  checkQueueAvailability,
 } from './watchlist';
 import { cacheShow } from './showCache';
 import { updateSettings } from './settings';
+import * as tmdb from './tmdb';
+
+vi.mock('./tmdb', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./tmdb')>();
+  return {
+    ...actual,
+    isEpisodeAvailable: vi.fn(),
+  };
+});
 
 describe('Watchlist Service', () => {
   let testShow: Awaited<ReturnType<typeof cacheShow>>;
@@ -149,6 +159,137 @@ describe('Watchlist Service', () => {
 
       await expect(promoteFromQueue(entry.id)).rejects.toThrow('not queued');
     });
+
+    it('throws error when episode not available for Returning Series', async () => {
+      await updateSettings({ weekdayMinutes: 120 });
+
+      // Create a returning series show directly
+      const returningShow = await prisma.show.create({
+        data: {
+          tmdbId: 77777,
+          title: 'Returning Test Show',
+          genres: '["Drama"]',
+          totalSeasons: 2,
+          totalEpisodes: 20,
+          episodeRuntime: 45,
+          status: 'Returning Series',
+        },
+      });
+
+      const entry = await prisma.watchlistEntry.create({
+        data: {
+          showId: returningShow.id,
+          status: 'queued',
+          currentSeason: 1,
+          currentEpisode: 1,
+        },
+      });
+
+      vi.mocked(tmdb.isEpisodeAvailable).mockResolvedValueOnce({
+        available: false,
+        airDate: '2099-12-31',
+      });
+
+      await expect(promoteFromQueue(entry.id)).rejects.toThrow(
+        'No episodes available yet. Next episode airs 2099-12-31'
+      );
+
+      // Cleanup
+      await prisma.watchlistEntry.delete({ where: { id: entry.id } });
+      await prisma.show.delete({ where: { id: returningShow.id } });
+    });
+
+    it('throws error with TBA when no air date known', async () => {
+      await updateSettings({ weekdayMinutes: 120 });
+
+      const returningShow = await prisma.show.create({
+        data: {
+          tmdbId: 77778,
+          title: 'TBA Test Show',
+          genres: '["Sci-Fi"]',
+          totalSeasons: 1,
+          totalEpisodes: 10,
+          episodeRuntime: 60,
+          status: 'Returning Series',
+        },
+      });
+
+      const entry = await prisma.watchlistEntry.create({
+        data: {
+          showId: returningShow.id,
+          status: 'queued',
+          currentSeason: 2,
+          currentEpisode: 1,
+        },
+      });
+
+      vi.mocked(tmdb.isEpisodeAvailable).mockResolvedValueOnce({
+        available: false,
+        airDate: null,
+      });
+
+      await expect(promoteFromQueue(entry.id)).rejects.toThrow(
+        'No episodes available yet. Air date TBA'
+      );
+
+      // Cleanup
+      await prisma.watchlistEntry.delete({ where: { id: entry.id } });
+      await prisma.show.delete({ where: { id: returningShow.id } });
+    });
+
+    it('succeeds when episode is available for Returning Series', async () => {
+      await updateSettings({ weekdayMinutes: 120 });
+
+      const returningShow = await prisma.show.create({
+        data: {
+          tmdbId: 77779,
+          title: 'Available Test Show',
+          genres: '["Comedy"]',
+          totalSeasons: 3,
+          totalEpisodes: 30,
+          episodeRuntime: 30,
+          status: 'Returning Series',
+        },
+      });
+
+      const entry = await prisma.watchlistEntry.create({
+        data: {
+          showId: returningShow.id,
+          status: 'queued',
+          currentSeason: 1,
+          currentEpisode: 5,
+        },
+      });
+
+      vi.mocked(tmdb.isEpisodeAvailable).mockResolvedValueOnce({
+        available: true,
+        airDate: '2020-01-01',
+      });
+
+      const result = await promoteFromQueue(entry.id);
+      expect(result.status).toBe('watching');
+
+      // Cleanup
+      await prisma.showDayAssignment.deleteMany({ where: { watchlistEntryId: entry.id } });
+      await prisma.watchlistEntry.delete({ where: { id: entry.id } });
+      await prisma.show.delete({ where: { id: returningShow.id } });
+    });
+
+    it('does not check availability for Ended shows', async () => {
+      await updateSettings({ weekdayMinutes: 120 });
+
+      // testShow (Breaking Bad) is "Ended"
+      const entry = await addToWatchlist(testShow.id);
+
+      // Spy to verify isEpisodeAvailable is NOT called
+      const spy = vi.mocked(tmdb.isEpisodeAvailable);
+      spy.mockClear();
+
+      const result = await promoteFromQueue(entry.id);
+
+      expect(result.status).toBe('watching');
+      expect(spy).not.toHaveBeenCalled();
+    });
   });
 
   describe('finishShow', () => {
@@ -201,5 +342,79 @@ describe('Watchlist Service', () => {
 
       expect(result.promotedEntry).toBeNull();
     });
+  });
+});
+
+describe('checkQueueAvailability', () => {
+  let showId: number;
+  let entryId: number;
+
+  beforeEach(async () => {
+    vi.resetAllMocks();
+
+    await prisma.scheduledEpisode.deleteMany();
+    await prisma.scheduleDay.deleteMany();
+    await prisma.showDayAssignment.deleteMany();
+    await prisma.watchlistEntry.deleteMany();
+    await prisma.show.deleteMany();
+
+    const show = await prisma.show.create({
+      data: {
+        tmdbId: 99996,
+        title: 'Returning Test',
+        genres: '["Drama"]',
+        totalSeasons: 2,
+        totalEpisodes: 20,
+        episodeRuntime: 45,
+        status: 'Returning Series',
+      },
+    });
+    showId = show.id;
+
+    const entry = await prisma.watchlistEntry.create({
+      data: {
+        showId: show.id,
+        status: 'queued',
+        currentSeason: 1,
+        currentEpisode: 1,
+      },
+    });
+    entryId = entry.id;
+  });
+
+  afterEach(async () => {
+    await prisma.watchlistEntry.deleteMany({ where: { showId } });
+    await prisma.show.deleteMany({ where: { id: showId } });
+  });
+
+  it('returns availability status for queued returning shows', async () => {
+    vi.mocked(tmdb.isEpisodeAvailable).mockResolvedValueOnce({
+      available: false,
+      airDate: '2099-06-15',
+    });
+
+    const result = await checkQueueAvailability();
+
+    expect(result[entryId]).toEqual({
+      available: false,
+      airDate: '2099-06-15',
+    });
+  });
+
+  it('returns available true for ended shows without calling TMDB', async () => {
+    // Update show to be "Ended"
+    await prisma.show.update({
+      where: { id: showId },
+      data: { status: 'Ended' },
+    });
+
+    const result = await checkQueueAvailability();
+
+    expect(result[entryId]).toEqual({
+      available: true,
+      airDate: null,
+    });
+    // TMDB should not have been called
+    expect(tmdb.isEpisodeAvailable).not.toHaveBeenCalled();
   });
 });

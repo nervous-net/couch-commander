@@ -3,7 +3,7 @@
 
 import { Router } from 'express';
 import { cacheShow } from '../../services/showCache';
-import { addToWatchlist, removeFromWatchlist, promoteFromQueue, finishShow, demoteToQueue } from '../../services/watchlist';
+import { addToWatchlist, removeFromWatchlist, promoteFromQueue, finishShow, demoteToQueue, checkQueueAvailability } from '../../services/watchlist';
 import { clearSchedule } from '../../services/scheduler';
 import { setShowDays } from '../../services/dayAssignment';
 import { prisma } from '../../lib/db';
@@ -29,6 +29,15 @@ router.post('/', async (req, res) => {
     } else {
       res.status(500).json({ error: 'Failed to add show' });
     }
+  }
+});
+
+router.get('/availability', async (req, res) => {
+  try {
+    const availability = await checkQueueAvailability();
+    res.json(availability);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to check availability' });
   }
 });
 

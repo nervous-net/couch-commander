@@ -4,6 +4,7 @@
 import { prisma } from '../lib/db';
 import type { WatchlistEntry, Show, ShowDayAssignment } from '@prisma/client';
 import { assignShowToDay, findBestDayForShow, removeAllAssignments } from './dayAssignment';
+import { isEpisodeAvailable } from './tmdb';
 
 interface WatchlistOptions {
   startSeason?: number;
@@ -118,6 +119,22 @@ export async function promoteFromQueue(
   if (!entry) throw new Error('Entry not found');
   if (entry.status !== 'queued') throw new Error('Entry is not queued');
 
+  // Check if episode is available for returning series
+  if (entry.show.status === 'Returning Series') {
+    const availability = await isEpisodeAvailable(
+      entry.show.tmdbId,
+      entry.currentSeason,
+      entry.currentEpisode
+    );
+
+    if (!availability.available) {
+      const dateMsg = availability.airDate
+        ? `Next episode airs ${availability.airDate}`
+        : 'Air date TBA';
+      throw new Error(`No episodes available yet. ${dateMsg}`);
+    }
+  }
+
   const genres = JSON.parse(entry.show.genres) as string[];
   const bestDay = await findBestDayForShow(entry.show.episodeRuntime, genres);
 
@@ -226,4 +243,36 @@ async function autoPromoteFromQueue(
 
   // Promote the best match
   return promoteFromQueue(best.entry.id);
+}
+
+export interface QueueAvailabilityMap {
+  [entryId: number]: {
+    available: boolean;
+    airDate: string | null;
+  };
+}
+
+export async function checkQueueAvailability(): Promise<QueueAvailabilityMap> {
+  const queue = await prisma.watchlistEntry.findMany({
+    where: { status: 'queued' },
+    include: { show: true },
+  });
+
+  const result: QueueAvailabilityMap = {};
+
+  for (const entry of queue) {
+    // Only check returning series - ended shows are always "available"
+    if (entry.show.status === 'Returning Series') {
+      const availability = await isEpisodeAvailable(
+        entry.show.tmdbId,
+        entry.currentSeason,
+        entry.currentEpisode
+      );
+      result[entry.id] = availability;
+    } else {
+      result[entry.id] = { available: true, airDate: null };
+    }
+  }
+
+  return result;
 }
