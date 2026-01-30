@@ -1,0 +1,92 @@
+// ABOUTME: Database schema for Couch Commander.
+// ABOUTME: Defines Show, WatchlistEntry, ScheduleDay, ScheduledEpisode, and Settings models.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Show {
+  id            Int       @id @default(autoincrement())
+  tmdbId        Int       @unique
+  title         String
+  posterPath    String?
+  genres        String    // JSON array of genre names
+  totalSeasons  Int
+  totalEpisodes Int
+  episodeRuntime Int      // Average runtime in minutes
+  status        String    // "Returning Series", "Ended", etc.
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  watchlistEntries WatchlistEntry[]
+  scheduledEpisodes ScheduledEpisode[]
+}
+
+model WatchlistEntry {
+  id            Int       @id @default(autoincrement())
+  showId        Int
+  show          Show      @relation(fields: [showId], references: [id], onDelete: Cascade)
+  priority      Int       @default(0)
+  startSeason   Int       @default(1)
+  startEpisode  Int       @default(1)
+  currentSeason Int       @default(1)
+  currentEpisode Int      @default(1)
+  modeOverride  String?   // "sequential", "roundrobin", or null for default
+  active        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([showId])
+}
+
+model ScheduleDay {
+  id            Int       @id @default(autoincrement())
+  date          DateTime  @unique
+  plannedMinutes Int      @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  episodes      ScheduledEpisode[]
+}
+
+model ScheduledEpisode {
+  id            Int       @id @default(autoincrement())
+  scheduleDayId Int
+  scheduleDay   ScheduleDay @relation(fields: [scheduleDayId], references: [id], onDelete: Cascade)
+  showId        Int
+  show          Show      @relation(fields: [showId], references: [id], onDelete: Cascade)
+  season        Int
+  episode       Int
+  runtime       Int       // In minutes
+  status        String    @default("pending") // "pending", "watched", "skipped"
+  order         Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([scheduleDayId, showId, season, episode])
+}
+
+model Settings {
+  id                  Int     @id @default(1)
+  weekdayMinutes      Int     @default(120)  // 2 hours
+  weekendMinutes      Int     @default(240)  // 4 hours
+  mondayMinutes       Int?    // Override for specific days
+  tuesdayMinutes      Int?
+  wednesdayMinutes    Int?
+  thursdayMinutes     Int?
+  fridayMinutes       Int?
+  saturdayMinutes     Int?
+  sundayMinutes       Int?
+  schedulingMode      String  @default("sequential") // "sequential", "roundrobin", "genre"
+  staggeredStart      Boolean @default(false)
+  staggerEpisodes     Int     @default(3)  // Episodes before next show starts
+  genreRules          String  @default("[]") // JSON array of rules
+  scheduleWindowDays  Int     @default(14)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
