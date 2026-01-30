@@ -53,12 +53,19 @@
           </p>
           <p class="text-sm text-purple-400"><%= formatDays(entry.dayAssignments) %></p>
         </div>
-        <button hx-delete="/api/watchlist/<%= entry.id %>"
-                hx-target="closest div.bg-gray-800"
-                hx-swap="outerHTML"
-                class="text-red-400 hover:text-red-300">
-          Remove
-        </button>
+        <div class="flex gap-2">
+          <button hx-post="/api/watchlist/<%= entry.id %>/finish"
+                  hx-swap="none"
+                  class="text-green-400 hover:text-green-300 text-sm">
+            Finish
+          </button>
+          <button hx-delete="/api/watchlist/<%= entry.id %>"
+                  hx-target="closest div.bg-gray-800"
+                  hx-swap="outerHTML"
+                  class="text-red-400 hover:text-red-300">
+            Remove
+          </button>
+        </div>
       </div>
       <% }) %>
     </div>

@@ -1,9 +1,9 @@
 // ABOUTME: API routes for managing watchlist entries.
-// ABOUTME: Handles add, remove, promote, and reorder operations.
+// ABOUTME: Handles add, remove, promote, finish, and reorder operations.
 
 import { Router } from 'express';
 import { cacheShow } from '../../services/showCache';
-import { addToWatchlist, removeFromWatchlist, promoteFromQueue } from '../../services/watchlist';
+import { addToWatchlist, removeFromWatchlist, promoteFromQueue, finishShow } from '../../services/watchlist';
 import { clearSchedule } from '../../services/scheduler';
 
 const router = Router();
@@ -45,6 +45,17 @@ router.post('/:id/promote', async (req, res) => {
   try {
     const entry = await promoteFromQueue(parseInt(id));
     res.status(200).json(entry);
+  } catch (error) {
+    res.status(400).json({ error: (error as Error).message });
+  }
+});
+
+router.post('/:id/finish', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await finishShow(parseInt(id));
+    res.status(200).json(result);
   } catch (error) {
     res.status(400).json({ error: (error as Error).message });
   }

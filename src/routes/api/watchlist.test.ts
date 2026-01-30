@@ -93,4 +93,44 @@ describe('Watchlist API', () => {
       expect(res.status).toBe(400);
     });
   });
+
+  describe('POST /api/watchlist/:id/finish', () => {
+    it('marks show as finished', async () => {
+      // Add and promote a show
+      const addRes = await request(app)
+        .post('/api/watchlist')
+        .send({ tmdbId: 1396 });
+      const entryId = addRes.body.id;
+
+      await request(app).post(`/api/watchlist/${entryId}/promote`);
+
+      // Finish it
+      const res = await request(app)
+        .post(`/api/watchlist/${entryId}/finish`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.finishedEntry.status).toBe('finished');
+    });
+
+    it('auto-promotes from queue when finishing', async () => {
+      // Add two shows
+      const add1 = await request(app)
+        .post('/api/watchlist')
+        .send({ tmdbId: 1396 });
+      const add2 = await request(app)
+        .post('/api/watchlist')
+        .send({ tmdbId: 60059 });
+
+      // Promote first one
+      await request(app).post(`/api/watchlist/${add1.body.id}/promote`);
+
+      // Finish it - should auto-promote the second
+      const res = await request(app)
+        .post(`/api/watchlist/${add1.body.id}/finish`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.promotedEntry).not.toBeNull();
+      expect(res.body.promotedEntry.status).toBe('watching');
+    });
+  });
 });
