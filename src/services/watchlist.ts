@@ -142,6 +142,28 @@ export async function promoteFromQueue(
   return result;
 }
 
+export async function demoteToQueue(entryId: number): Promise<WatchlistEntryWithShow> {
+  const entry = await prisma.watchlistEntry.findUnique({
+    where: { id: entryId },
+    include: { show: true },
+  });
+
+  if (!entry) throw new Error('Entry not found');
+  if (entry.status !== 'watching') throw new Error('Entry is not currently watching');
+
+  // Remove all day assignments
+  await removeAllAssignments(entryId);
+
+  // Update status to queued
+  const updated = await prisma.watchlistEntry.update({
+    where: { id: entryId },
+    data: { status: 'queued' },
+    include: { show: true },
+  });
+
+  return updated;
+}
+
 export interface FinishShowResult {
   finishedEntry: WatchlistEntryWithShow;
   promotedEntry: WatchlistEntryWithShowAndAssignments | null;

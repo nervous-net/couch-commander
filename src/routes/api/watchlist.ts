@@ -3,7 +3,7 @@
 
 import { Router } from 'express';
 import { cacheShow } from '../../services/showCache';
-import { addToWatchlist, removeFromWatchlist, promoteFromQueue, finishShow, updateWatchlistEntry } from '../../services/watchlist';
+import { addToWatchlist, removeFromWatchlist, promoteFromQueue, finishShow, demoteToQueue } from '../../services/watchlist';
 import { clearSchedule } from '../../services/scheduler';
 import { setShowDays } from '../../services/dayAssignment';
 import { prisma } from '../../lib/db';
@@ -62,6 +62,18 @@ router.post('/:id/finish', async (req, res) => {
   try {
     const result = await finishShow(parseInt(id));
     res.status(200).json(result);
+  } catch (error) {
+    res.status(400).json({ error: (error as Error).message });
+  }
+});
+
+router.post('/:id/demote', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const entry = await demoteToQueue(parseInt(id));
+    await clearSchedule();
+    res.status(200).json(entry);
   } catch (error) {
     res.status(400).json({ error: (error as Error).message });
   }
