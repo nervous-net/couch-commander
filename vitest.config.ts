@@ -9,5 +9,10 @@ export default defineConfig({
     environment: 'node',
     setupFiles: ['dotenv/config'],
     exclude: ['**/node_modules/**', '**/dist/**'],
+    // Run tests sequentially to avoid database conflicts
+    fileParallelism: false,
+    sequence: {
+      concurrent: false,
+    },
   },
 });
